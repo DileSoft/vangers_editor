@@ -1,0 +1,343 @@
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="FileSaver.js"></script>
+<script>
+    $(()=>{
+        var image_height=new Image();
+        var image_material=new Image();
+        var canvas=document.getElementById("canvas");
+        var context=canvas.getContext('2d');
+        var canvas_height=window.canvas_height=document.createElement("canvas");
+        var context_height=canvas_height.getContext('2d');
+        var canvas_material=window.canvas_material=document.createElement("canvas");
+        var context_material=canvas_material.getContext('2d');
+        function colorToRGBA(color) {
+            // Returns the color as an array of [r, g, b, a] -- all range from 0 - 255
+            // color must be a valid canvas fillStyle. This will cover most anything
+            // you'd want to use.
+            // Examples:
+            // colorToRGBA('red')  # [255, 0, 0, 255]
+            // colorToRGBA('#f00') # [255, 0, 0, 255]
+            var cvs, ctx;
+            cvs = document.createElement('canvas');
+            cvs.height = 1;
+            cvs.width = 1;
+            ctx = cvs.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, 1, 1);
+            result = ctx.getImageData(0, 0, 1, 1).data;
+            $(cvs).remove();
+            return result;
+        }
+        function getMousePos(evt) {
+            var rect = canvas.getBoundingClientRect();
+            return {
+                x: Math.floor(evt.clientX - rect.left),
+                y: Math.floor(evt.clientY - rect.top)
+            };
+        }
+        function randomIntFromInterval(min, max) { // min and max included 
+            return Math.floor(Math.random() * (max - min + 1) + min);
+        }
+        let rerender = window.rerender = (coords)=>{
+            let materials = [
+                colorToRGBA($('#color0').val()),
+                colorToRGBA($('#color1').val()),
+                colorToRGBA($('#color2').val()),
+                colorToRGBA($('#color3').val()),
+                colorToRGBA($('#color4').val()),
+                colorToRGBA($('#color5').val()),
+                colorToRGBA($('#color6').val()),
+                colorToRGBA($('#color7').val()),
+            ];
+            let img_width = canvas_height.width;
+            let img_height = canvas_height.height;
+            if (!coords) {
+                coords = {
+                    from_x: 0,
+                    to_x: img_width,
+                    from_y: 0,
+                    to_y: img_height
+                }
+            }
+            let imageData = context_height.getImageData(coords.from_x, coords.from_y, coords.to_x-coords.from_x, coords.to_y-coords.from_y).data;
+            let materialData = context_material.getImageData(coords.from_x, coords.from_y, coords.to_x-coords.from_x, coords.to_y-coords.from_y).data;
+            let newImageData = context_height.createImageData(coords.to_x - coords.from_x, coords.to_y - coords.from_y);
+            let newData = newImageData.data;
+            // let shadows = {};
+            for (let y=0; y<=coords.to_y - coords.from_y; y++) {
+                for (let x=0; x<=coords.to_x - coords.from_x; x++) {
+                    let shift = y*(coords.to_x - coords.from_x)*4 + x*4;
+                    let top_height = imageData[shift+1];
+                    let bottom_height = imageData[shift+0];
+                    let delta = imageData[shift+2];
+                    let top_floor = bottom_height + delta;
+                    let color = 196;
+                    // console.log(materialData[shift+1]/16);
+                    let material = materials[materialData[shift+1]/16];
+                    if (!material) {
+                        //console.log(materialData[shift+1]/16);
+                        continue;
+                    }
+                    newData[shift+0] = material[0];
+                    newData[shift+1] = material[1];
+                    newData[shift+2] = material[2];
+                    // if (imageData[shift+1] < imageData[shift+1+4]) {
+                    //     newData[shift+0] = newData[shift+0]/2;
+                    //     newData[shift+1] = newData[shift+1]/2;
+                    //     newData[shift+2] = newData[shift+2]/2;
+                    // }
+                    // if (imageData[shift+1] > imageData[shift+1+4]) {
+                    //     newData[shift+0] = newData[shift+0]*2;
+                    //     newData[shift+1] = newData[shift+1]*2;
+                    //     newData[shift+2] = newData[shift+2]*2;
+                    // }
+                    let diff = (imageData[shift+1] - imageData[shift+1+4])*32;
+                    newData[shift+0] += diff;
+                    newData[shift+1] += diff;
+                    newData[shift+2] += diff;
+                    newData[shift+3] = 255;
+                    continue;
+                    let current_x = x;
+                    let shadowShift = shift;
+                    let current_delta = delta;
+                    let shadow_height = (top_height-1)
+                    let shadow_end = 0;
+                    if (top_height!=bottom_height) {
+                        current_x = x - top_floor;
+                        shadow_end = top_floor
+                    }
+                    for (;shadow_height>=shadow_end;shadow_height--) {
+                        current_x--;
+                        shadowShift-=4;
+                        if (current_x < coords.from_x) {
+                            break;
+                        }
+                        let prex_pixel = imageData[shadowShift+1];
+                        if (prex_pixel > shadow_height) {
+                            break;
+                        }
+                        let new_color = 0;
+                        // if (!shadows[shadowShift]) {
+                            newData[shadowShift+0] = newData[shadowShift+0]/1.5;
+                            newData[shadowShift+1] = newData[shadowShift+1]/1.5;
+                            newData[shadowShift+2] = newData[shadowShift+2]/1.5;
+                            // shadows[shadowShift] = true;
+                        // }
+                    }
+                }
+                if (y == 2048-1) {
+                    //break;
+                }
+            }
+            for (let y=0; y<=coords.to_y - coords.from_y; y++) {
+                // break;
+                let shadowEnabled = false;
+                let shadow_height
+                for (let x=coords.to_x - coords.from_x-1; x>=0; x--) {
+                    let shift = y*(coords.to_x - coords.from_x)*4 + x*4;
+                    let top_height = imageData[shift+1];
+                    let bottom_height = imageData[shift+0];
+                    let delta = imageData[shift+2];
+                    let top_floor = bottom_height + delta;
+                    let current_delta = delta;
+                    shadowShift = shift;
+                    if (shadowEnabled) {
+                        shadow_height--;
+                        if (shadow_height <= top_height) {
+                            shadowEnabled = false;
+                        } else {
+                            newData[shadowShift+0] = newData[shadowShift+0]/2;
+                            newData[shadowShift+1] = newData[shadowShift+1]/2;
+                            newData[shadowShift+2] = newData[shadowShift+2]/2;
+                        }
+                    }
+                    if (!shadowEnabled) {
+                        shadowEnabled = true;
+                        shadow_height=top_height;
+                    }
+                }
+            }
+            context.putImageData( newImageData, coords.from_x, coords.from_y );
+        }
+        let load = (height, material) => {
+            let loaded_material = false;
+            let loaded_height = false;
+            let onload = () => {
+                if (loaded_height && loaded_material) {
+                    loaded_material = false;
+                    loaded_height = false;
+                    rerender();
+                }
+            }
+            image_height.onload=()=>{
+                canvas_height.width = canvas.width = image_height.width;
+                canvas_height.height = canvas.height = image_height.height;
+                context_height.drawImage(image_height,0,0,image_height.width,image_height.height);
+                $(image_height).remove;
+                loaded_height = true;
+                onload();
+            }
+            
+            image_material.onload=()=>{
+                canvas_material.width = image_material.width;
+                canvas_material.height = image_material.height;
+                context_material.drawImage(image_material,0,0,image_material.width,image_material.height);
+                $(image_material).remove;
+                loaded_material = true;
+                onload();
+            }
+            image_height.src = height;
+            image_material.src=material;
+        }
+        load("height.png", "material.png")
+        canvas.onmouseup = function (e) {
+            var pos = getMousePos(e);
+            if ($('#tool_select').val() == 'hill') {
+                // // context_height.fillStyle = 'rgb('+$('#height').val()+','+$('#height').val()+',0)';
+                // // context_height.fillRect(pos.x, pos.y, 10, 10);
+                // let stroke = 100;
+                // let imageData = context_height.getImageData(pos.x, pos.y, stroke, stroke).data;
+                // let newImageData = context_height.createImageData(stroke, stroke);
+                // let newData = newImageData.data;
+                // for (let x=0; x<stroke; x++) {
+                //     for (let y=0; y<stroke; y++) {
+                //         let shift = y*stroke*4+x*4;
+                //         // let height = (((x < stroke/2 ? x : stroke-x) + (y < stroke/2 ? y : stroke-y)) / stroke) * 255;
+                //         // console.log(height);
+                //         newData[shift] = newData[shift+1] = imageData[shift] + randomIntFromInterval(-64, 64);//height;
+                //         newData[shift+2]=0;
+                //         newData[shift+3]=255;
+                //     }
+                // }
+                //context_height.putImageData( newImageData, pos.x, pos.y );
+                let radius = parseInt($('#radius').val());
+                let height = parseInt($('#height').val());
+                let material = $('#material').val();
+                for (let i=radius; i>0; i--) {
+                    height+=2;
+                    let real_height = height + randomIntFromInterval(-1, 1);
+                    context_height.beginPath();
+                    context_height.arc(pos.x, pos.y, i, 0, 2 * Math.PI, false);
+                    context_height.fillStyle = 'rgb('+real_height+','+real_height+',0)';
+                    context_height.lineWidth = 0;
+                    context_height.fill();
+                }
+                if (material !== 'none') {
+                    context_material.beginPath();
+                    context_material.arc(pos.x, pos.y, radius, 0, 2 * Math.PI, false);
+                    context_material.fillStyle = 'rgb('+material*16+','+material*16+',0)';
+                    context_material.lineWidth = 0;
+                    context_material.fill();
+                }
+                // context_height.lineWidth = 0;
+                // context_height.strokeStyle = 'rgb(128,128,0)';
+                // context_height.stroke();
+                rerender({from_x: 0, from_y: pos.y-radius, to_x: canvas.width, to_y: pos.y+radius});
+            }
+            if ($('#tool_select').val() == 'image') {
+                var image_file = $('#image_file')[0].files[0];
+                var fr_image = new FileReader();
+                fr_image.onload = function () {
+                    let image = new Image();
+                    image.onload = function() {
+                        let image_canvas = document.createElement('canvas');
+                        image_canvas.width = image.width;
+                        image_canvas.height = image.height;
+                        let image_context = image_canvas.getContext('2d');
+                        image_context.drawImage(image, 0, 0, image.width, image.height);
+                        let image_data = image_context.getImageData(0, 0, image.width, image.height).data;
+                        let height_context_image_data = context_height.getImageData(pos.x, pos.y, image.width, image.height);
+                        let height_image_data = height_context_image_data.data;
+                        for (let shift = 0; shift<image_data.length; shift+=4) {
+                            if (image_data[shift+3] < 128) {
+                                continue;
+                            }
+                            let height = (image_data[shift] + image_data[shift+1] + image_data[shift+2]) / 3;
+                            height_image_data[shift] = height_image_data[shift+1] = height;
+                            height_image_data[shift+2] = 0;
+                        }
+                        context_height.putImageData(height_context_image_data, pos.x, pos.y);
+                        $(image_canvas).remove();
+                        rerender({from_x: 0, from_y: pos.y, to_x: canvas.width, to_y: pos.y+image.height});
+                    }
+                    image.src = fr_image.result;
+                }
+                fr_image.readAsDataURL(image_file);
+            }
+        }
+        $('#upload').click(()=>{
+            var height_file = $('#height_file')[0].files[0];
+            var material_file = $('#material_file')[0].files[0];
+            var fr_height = new FileReader();
+            var fr_material = new FileReader();
+            fr_height.onload = fr_material.onload = function () {
+                if (fr_height.result && fr_material.result) {
+                    load(fr_height.result, fr_material.result);
+                }
+            }
+            fr_height.readAsDataURL(height_file);
+            fr_material.readAsDataURL(material_file);
+        })
+        $('#tool_select').change(function(){
+            $('.tool').hide();
+            $('#tool_'+$(this).val()).show();
+        })
+    });
+</script>
+<div style="display: flex; height: 100%;">
+    <div style="width: 200px;">
+        <input type="button" onclick="rerender();" value="rerender"/>
+        <div><select id="tool_select">
+            <option value="hill">hill</option>
+            <option value="image">image</option>
+        </select></div>
+        <div class="tool" id="tool_hill">
+            <div>Radius: <input id="radius" value="50"/></div>
+            <div>Height: <input id="height" value="128"/></div>
+            <div>Material: <select id="material">
+                <option value="none" selected>Not change</option>
+                <option value="0">Water</option>
+                <option value="1">High earth</option>
+                <option value="2">Low earth</option>
+                <option value="3">Metal</option>
+                <option value="4">Brown glowing</option>
+                <option value="5">Red glowing</option>
+                <option value="6">Yellow glowing</option>
+                <option value="7">Mushroom</option>
+            </select></div>
+        </div>
+        <div class="tool" id="tool_image" style="display: none;">
+            <div>image: <input type="file" id="image_file"/></div>
+        </div>
+        <div>Colors</div>
+        <div><input id="color0" value="cyan"/></div>
+        <div><input id="color1" value="green"/></div>
+        <div><input id="color2" value="lightgreen"/></div>
+        <div><input id="color3" value="gray"/></div>
+        <div><input id="color4" value="brown"/></div>
+        <div><input id="color5" value="red"/></div>
+        <div><input id="color6" value="yellow"/></div>
+        <div><input id="color7" value="darkgreen"/></div>
+        <div>
+            <input type="button" value="download height" onclick="
+                canvas_height.toBlob(function(blob) {
+                    saveAs(blob, 'height.png');
+                });
+            "/>
+        </div>
+        <div>
+            <input type="button" value="download material" onclick="
+                canvas_material.toBlob(function(blob) {
+                    saveAs(blob, 'material.png');
+                });
+            "/>
+        </div>
+        <h4>Upload</h4>
+        <div>height: <input type="file" id="height_file"/></div>
+        <div>material: <input type="file" id="material_file"/></div>
+        <div><input type="button" value="Upload" id="upload"/></div>
+    </div>
+    <div style="overflow: scroll;">
+        <canvas style="" id="canvas" width="500" height="500">your canvas loads here</canvas>
+    </div>
+</div>
