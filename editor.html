@@ -253,8 +253,18 @@
                                 continue;
                             }
                             let height = (image_data[shift] + image_data[shift+1] + image_data[shift+2]) / 3;
-                            height_image_data[shift] = height_image_data[shift+1] = height;
-                            height_image_data[shift+2] = 0;
+                            if ($('#image_type').val() == 'additive') {
+                                height += height_image_data[shift+1];
+                            }
+                            if ($('#image_level').val() == "both") {
+                                height_image_data[shift] = height_image_data[shift+1] = height;
+                                height_image_data[shift+2] = 0;
+                            }
+                            if ($('#image_level').val() == "high") {
+                                let delta = (height - parseInt($('#image_height').val())) - height_image_data[shift];
+                                height_image_data[shift+1] = height;
+                                height_image_data[shift+2] = delta;
+                            }
                         }
                         context_height.putImageData(height_context_image_data, pos.x, pos.y);
                         $(image_canvas).remove();
@@ -308,6 +318,15 @@
         </div>
         <div class="tool" id="tool_image" style="display: none;">
             <div>image: <input type="file" id="image_file"/></div>
+            <div>Type: <select id="image_type">
+                <option value="replace">Replace</option>
+                <option value="additive">Additive</option>
+            </select></div>
+            <div>Type: <select id="image_level">
+                <option value="both">both</option>
+                <option value="high">high</option>
+            </select></div>
+            <div>Image height <input id="image_height" value="10"/></div>
         </div>
         <div>Colors</div>
         <div><input id="color0" value="cyan"/></div>
